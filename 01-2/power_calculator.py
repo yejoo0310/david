@@ -1,26 +1,38 @@
 def main():
     while True:
-        number = float(input("Enter number:"))
-        if number <= 0:
+        number = input("Enter number: ")
+        try:
+            number = float(number)
+            if number == 0:
+                raise ValueError
+            break
+        except ValueError:
             print("Invalid number input.")
             continue
-        else:
-            break
-
+    
+    flag = 0
     while True:
-        exponent = int(input("Enter exponent:"))
-        if exponent < 0:
-            print("Invalid Exponent input.")
-            continue
-        else:
+        exponent = input("Enter exponent: ")
+        try:
+            exponent = int(exponent)
+            if exponent < 0:
+                exponent *= -1
+                flag = 1
             break
-
+        except ValueError:
+            print("Invalid exponent input.")
+            continue
+    
     result = 1
-    while (exponent > 0):
-        result *= number
+    while exponent > 0:
+        result = result * number
         exponent -= 1
     
-    print("Result:", int(result))
+    if flag == 1:
+        result = float(result)
+        result = 1 / result
+
+    print("Result:", result)
 
 if __name__ == "__main__":
     main()
