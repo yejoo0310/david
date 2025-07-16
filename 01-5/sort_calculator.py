@@ -19,21 +19,14 @@ def to_float(s):
 
 # 숫자 오름차순으로 정렬
 def sort_numbers(s):
-    ans = s.copy()
-    n = len(ans)
+    n = len(s)
 
     for i in range(n):
         for j in range(0, n - i -1):
-            if ans[j] > ans[j + 1]:
-                ans[j], ans[j + 1] = ans[j + 1], ans[j]
+            if s[j] > s[j + 1]:
+                s[j], s[j + 1] = s[j + 1], s[j]
     
-    return ans
-
-# 정렬된 숫자 출력
-def print_numbers(s):
-    print("Sorted: ", end="")
-    for number in s:
-        print(number, " ", end="")
+    return s
 
 def main():
     a = input("Enter numbers: ")
@@ -44,7 +37,8 @@ def main():
         return
 
     numbers = sort_numbers(numbers)
-    print_numbers(numbers)
+    print("Sorted:", *numbers)
+
 
 if __name__ == "__main__":
     main()
