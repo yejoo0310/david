@@ -41,44 +41,37 @@ def parse_expression(s):
     return parsed
 
 # 계산
-def calculate(parsed):
-    index = 1
-    while index < len(parsed):
-        if parsed[index] == '/':
-            print("/", index)
-            if parsed[index + 1] == 0:
-                print("Error: Division by zero.")
-                return None # 예외 처리) 0으로 나누는 경우
-            parsed[indexd-1] = divide(parsed[index - 1], parsed[index + 1])
-            del parsed[index: index + 2]
-        elif parsed[index] == '*':
-            print("*", index)
-            print(parsed[index - 1], parsed[index], parsed[index + 1])
-            parsed[index - 1] = multiply(parsed[index - 1], parsed[index + 1])
-            print(parsed[index - 1], parsed[index], parsed[index + 1])
-            del parsed[index: index + 2]
-            print(parsed[index - 1], parsed[index], parsed[index + 1])
+def calculate(A):
+    B = []
+
+    while A:
+        token = A.pop(0)
+        if token in ('*', '/'):
+            left = B.pop()
+            right = A.pop(0)
+            if token == '*':
+                tmp = multiply(left, right)
+                B.append(tmp)
+            elif token == '/':
+                if right == 0:
+                    print("Error: Division by zero.")
+                    return None
+                tmp = divide(left, right)
+                B.append(tmp)
         else:
-            if index + 2 < len(parsed):
-                print(parsed[index - 1], parsed[index], parsed[index + 1])
-                index+=2
-                print(parsed[index - 1], parsed[index], parsed[index + 1])
-            else:
-                break
+            B.append(token)
     
-    index = 1
-    while index < len(parsed):
-        if parsed[index] == '+':
-            parsed[index - 1] = add(parsed[index - 1], parsed[index + 1])
-            del parsed[index: index + 2]
-        elif parsed[index] == '-':
-            parsed[index - 1] = subtract(parsed[index - 1], parsed[index + 1])
-            del parsed[index: index + 2]
+    result = B.pop(0)
+    while B:
+        op = B.pop(0)
+        num = B.pop(0)
+        if op == '+':
+            result = add(result, num)
         else:
-            if index + 2 < len(parsed):
-                index += 1
-            else:
-                break
+            result = subtract(result, num)
+    
+    return result
+            
 
 def add(a: int, b: int) -> int:
     return a + b
