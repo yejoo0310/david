@@ -40,17 +40,73 @@ def parse_expression(s):
     
     return parsed
 
+# 계산
 def calculate(parsed):
+    index = 1
     while index < len(parsed):
-        if parsed[index] == '/' or parsed[index] == '*':
-              
+        if parsed[index] == '/':
+            print("/", index)
+            if parsed[index + 1] == 0:
+                print("Error: Division by zero.")
+                return None # 예외 처리) 0으로 나누는 경우
+            parsed[indexd-1] = divide(parsed[index - 1], parsed[index + 1])
+            del parsed[index: index + 2]
+        elif parsed[index] == '*':
+            print("*", index)
+            print(parsed[index - 1], parsed[index], parsed[index + 1])
+            parsed[index - 1] = multiply(parsed[index - 1], parsed[index + 1])
+            print(parsed[index - 1], parsed[index], parsed[index + 1])
+            del parsed[index: index + 2]
+            print(parsed[index - 1], parsed[index], parsed[index + 1])
+        else:
+            if index + 2 < len(parsed):
+                print(parsed[index - 1], parsed[index], parsed[index + 1])
+                index+=2
+                print(parsed[index - 1], parsed[index], parsed[index + 1])
+            else:
+                break
+    
+    index = 1
+    while index < len(parsed):
+        if parsed[index] == '+':
+            parsed[index - 1] = add(parsed[index - 1], parsed[index + 1])
+            del parsed[index: index + 2]
+        elif parsed[index] == '-':
+            parsed[index - 1] = subtract(parsed[index - 1], parsed[index + 1])
+            del parsed[index: index + 2]
+        else:
+            if index + 2 < len(parsed):
+                index += 1
+            else:
+                break
+
+def add(a: int, b: int) -> int:
+    return a + b
+
+
+def subtract(a: int, b: int) -> int:
+    return a - b
+
+
+def multiply(a: int, b: int) -> int:
+    return a * b
+
+
+def divide(a: int, b: int) -> float:
+    return a / b
 
 def main():
     a = input("Enter numbers: ")
     parsed = parse_expression(a)
 
     if parsed is None:
-        return    
+        return 
+    
+    result = calculate(parsed)
+    if result is None:
+        return 
+
+    print("Result:", result)  
 
 if __name__ == "__main__":
     main()
