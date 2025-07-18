@@ -20,7 +20,7 @@ def parse_expression(s):
                 return None
     
     return parsed
-
+    
 # 계산
 def calculate(A):
     B = []
@@ -42,6 +42,7 @@ def calculate(A):
         else:
             B.append(token)
     
+
     result = B.pop(0)
     while B:
         op = B.pop(0)
@@ -53,7 +54,6 @@ def calculate(A):
     
     return result
             
-
 def add(a: int, b: int) -> int:
     return a + b
 
