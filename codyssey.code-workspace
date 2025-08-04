@@ -1,0 +1,11 @@
+{
+  "folders": [
+    {
+      "name": "codyssey",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "terminal.integrated.defaultLocation": "panel"
+  }
+}
