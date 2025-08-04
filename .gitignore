@@ -1,1 +1,4 @@
 codyssey_project/
+
+__pycache__
+.venv
