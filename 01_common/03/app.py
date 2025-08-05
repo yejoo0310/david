@@ -11,6 +11,7 @@ def menu():
 
 @app.route("/")
 def home():
+    assert 1 < 0, "error"
     if app.debug:
         hostname = '컴퓨터(인스턴스) : ' + socket.gethostname()
     else:
@@ -19,5 +20,6 @@ def home():
 
 
 if __name__ == '__main__':
+    print(__debug__)
     # app.run('0.0.0.0', 80, debug=True)
     app.run('0.0.0.0', 80)
