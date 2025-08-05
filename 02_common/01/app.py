@@ -7,6 +7,10 @@ app = Flask(__name__)
 def menu():
     return render_template("menu.html")
 
+@app.route("/test4")
+def test4():
+    return render_template('test4.html')
+
 
 @app.route("/test3")
 def test3():
