@@ -7,6 +7,5 @@ app = Flask(__name__)
 def menu():
     return render_template("menu.html")
 
-
 if __name__ == '__main__':
     app.run('0.0.0.0', 80)
