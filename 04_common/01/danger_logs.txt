@@ -1,0 +1,5 @@
+2023-08-27 11:40:00, Oxygen tank explosion.
+2023-08-27 11:35:00, Oxygen tank unstable.
+2023-08-27 10:45:00, Second stage ignition. Rocket continues its ascent.
+2023-08-27 10:37:00, Max-Q passed. Vehicle is stable.
+2023-08-27 10:25:00, Engine ignition sequence started.
