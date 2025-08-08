@@ -1,12 +1,9 @@
 import os
 import csv
-import pickle
-from operator import itemgetter
 
 BASE_DIR = os.path.dirname(__file__)
 INPUT_CSV = os.path.join(BASE_DIR, 'Mars_Base_Inventory_List.csv')
 DANGER_CSV = os.path.join(BASE_DIR, 'Mars_Base_Inventory_danger.csv')
-BIN_FILE = os.path.join(BASE_DIR, 'Mars_Base_Inventory_List.bin')
 FLAMMABILITY_KEY = 'flammability_index'
 DANGER_THRESHOLD = 0.7
 
@@ -60,16 +57,6 @@ def sort_list(inventory_list):
     return [header] + data_sorted
 
 
-def save_list_to_binary(sorted_list):
-    with open(BIN_FILE, 'wb') as bf:
-        pickle.dump(sorted_list, bf)
-
-
-def read_list_from_binary():
-    with open(BIN_FILE, 'rb') as bf:
-        return pickle.load(bf)
-
-
 def flammability_filtering_and_save(sorted_list):
     header, *data = sorted_list
 
@@ -96,21 +83,13 @@ def main():
     inventory_list = raw_to_list(inventory)
     if inventory_list is None:
         return
-    for row in inventory_list:
-        print(row)
 
     sorted_list = sort_list(inventory_list)
     if sorted_list is None:
         return
-    for row in sorted_list:
-        print(row)
-
-    save_list_to_binary(sorted_list)
-    binary_list = read_list_from_binary()
-    for row in binary_list:
-        print(row)
 
     danger_list = flammability_filtering_and_save(sorted_list)
+    print('---------------print sorted danger list---------------')
     for row in danger_list:
         print(row)
 
