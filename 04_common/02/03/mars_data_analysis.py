@@ -63,7 +63,7 @@ def filter_and_save(parts_avg):
                 f.write('parts,mean_strength\n')
             return filtered
 
-        strength_str = np.char.mod('%.6g', filtered['mean_strength'])
+        strength_str = np.char.mod('%.3f', filtered['mean_strength'])
         rows = np.column_stack((filtered['parts'], strength_str))
 
         np.savetxt(
