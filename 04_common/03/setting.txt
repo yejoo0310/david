@@ -1,0 +1,13 @@
+{
+  "system_info": {
+    "os": true,
+    "os_version": true,
+    "cpu_type": true,
+    "cpu_cores": true,
+    "memory_size": true
+  },
+  "load_info": {
+    "cpu_usage": true,
+    "memory_usage": true
+  }
+}
