@@ -3,11 +3,11 @@ import zipfile
 import itertools
 import string
 import time
-import math
 from datetime import datetime
-from typing import Optional, Iterator, List, Set, Tuple
+from datetime import timedelta
+import signal
 
-from multiprocessing import Process, Event, Value, Lock, cpu_count
+from multiprocessing import Process, Event, Queue
 
 BASE_DIR = os.path.dirname(__file__)
 SECRET_FILE = os.path.join(BASE_DIR, 'emergency_storage_key.zip')
@@ -16,38 +16,76 @@ PASSWORD_FILE = os.path.join(BASE_DIR, 'password.txt')
 PASSWORD_SET = string.digits + string.ascii_lowercase
 PASSWORD_LEN = 6
 
-REPORT_SEC = 3.0              # 진행 로그(시간 기준)
-COUNTER_BATCH = 10_000        # 카운터를 이만큼 누적 후에만 공유메모리에 반영(락 경합 ↓)
-MAX_PROCS = 32                # 과도 생성 방지 상한선
+BATCH_SIZE = 100
 
 
-def now_str() -> str:
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+def try_password_batch(zf, member, pwd_batch):
+    for pwd in pwd_batch:
+        try:
+            with zf.open(member, pwd=pwd.encode('utf-8')) as f:
+                _ = f.read(1)
+            return pwd
+        except RuntimeError:
+            continue
+        except Exception:
+            continue
+    return None
 
 
-def fmt_duration(sec: float) -> str:
-    if sec < 60:
-        return f"{sec:.1f}s"
-    m, s = divmod(int(sec), 60)
-    if m < 60:
-        return f"{m}m{s:02d}s"
-    h, m = divmod(m, 60)
-    return f"{h}h{m:02d}m{s:02d}s"
-
-
-def try_password(zf, member, pwd):
+def worker_process(process_id, prefixes, found_event, result_queue, progress_queue):
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
-        with zf.open(member, pwd=pwd.encode('utf-8')) as f:
-            _ = f.read(1)
-        return True
-    except RuntimeError:
-        return False
-    except Exception:
-        return False
+        with zipfile.ZipFile(SECRET_FILE) as zf:
+            infos = zf.infolist()
+            if not infos:
+                return
+            member = infos[0]
+
+            attempts = 0
+            tail_len = PASSWORD_LEN - len(prefixes[0])
+            batch = [] 
+
+            for pfx in prefixes:
+                if found_event.is_set():
+                    break
+
+                for tail in itertools.product(PASSWORD_SET, repeat=tail_len):
+                    if found_event.is_set():
+                        break
+
+                    pwd = pfx + ''.join(tail)
+                    batch.append(pwd)
+                    attempts += 1
+
+                    if len(batch) >= BATCH_SIZE:
+                        result = try_password_batch(zf, member, batch)
+                        if result:
+                            found_event.set()
+                            result_queue.put((result, attempts))
+                            return
+                        batch = []
+
+                    if attempts % (100000 // len(prefixes) + 1) == 0:
+                        progress_queue.put((process_id, attempts))
+
+                    if attempts % 5000 == 0:
+                        time.sleep(0.001)
+
+            if batch and not found_event.is_set():
+                result = try_password_batch(zf, member, batch)
+                if result:
+                    found_event.set()
+                    result_queue.put((result, attempts))
+                    return
+
+    except Exception as e:
+        print(f'프로세스 {process_id}에서 오류 발생: {e}')
 
 
-def unlock_zip() -> Optional[str]:
-    print(f'시작 시간: {now_str()}')
+def unlock_zip():
+    print(
+        f"시작 시간: {datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f'배치 크기: {BATCH_SIZE} (처리 최적화 적용)')
 
     if not os.path.exists(SECRET_FILE):
         print('zip 파일을 찾을 수 없습니다.')
@@ -55,202 +93,101 @@ def unlock_zip() -> Optional[str]:
 
     total_space = len(PASSWORD_SET) ** PASSWORD_LEN
     start = time.perf_counter()
-    attempts = 0
 
-    try:
-        with zipfile.ZipFile(SECRET_FILE) as zf:
-            infos = zf.infolist()
-            if not infos:
-                print('zip 내부가 비어있습니다.')
-                return None
-            member = min(infos, key=lambda i: (i.file_size or 0))
+    num_processes = 4
+    print(f'사용할 프로세스 수: {num_processes}개')
 
-            for tup in itertools.product(PASSWORD_SET, repeat=PASSWORD_LEN):
-                pwd = ''.join(tup)
-                attempts += 1
-                if try_password(zf, member, pwd):
-                    elapsed = time.perf_counter() - start
-                    print('-----------------------------')
-                    print('암호가 해독되었습니다!')
-                    print(f'암호: {pwd}')
-                    print(f'총 시도 횟수: {attempts:,}')
-                    print(f'총 소요 시간: {elapsed:.2f}초')
-                    print('-----------------------------')
-                    with open(PASSWORD_FILE, 'w', encoding='utf-8') as f:
-                        f.write(f'zip 파일 암호: {pwd}\n')
-                    return pwd
+    found_event = Event()
+    result_queue = Queue()
+    progress_queue = Queue()
 
-                if attempts % 50_000 == 0:
-                    elapsed = time.perf_counter() - start
-                    rate = attempts / elapsed if elapsed > 0 else 0.0
-                    prog = attempts / total_space * 100
-                    remain = max(total_space - attempts, 0)
-                    eta = remain / rate if rate > 0 else math.inf
-                    eta_str = "∞" if not math.isfinite(
-                        eta) else fmt_duration(eta)
-                    print(f'[single] 시도횟수={attempts:,}, 경과시간={fmt_duration(elapsed)}, '
-                          f'진행률={prog:.6f}%')
-        print('실패: 전체 공간 소진')
-        return None
-    except KeyboardInterrupt:
-        elapsed = time.perf_counter() - start
-        print(f'\n중단됨. 현재 시도={attempts:,}, 경과={fmt_duration(elapsed)}')
-        return None
+    prefixes = [a + b for a in PASSWORD_SET for b in PASSWORD_SET]
+    buckets = [[] for _ in range(num_processes)]
+    for i, pfx in enumerate(prefixes):
+        buckets[i % num_processes].append(pfx)
 
-
-def try_password_bytes(zf, member, pwd_bytes):
-    try:
-        with zf.open(member, pwd=pwd_bytes) as f:
-            _ = f.read(1)
-        return True
-    except RuntimeError:
-        return False
-    except Exception:
-        return False
-
-
-PASSWORD_SET_BYTES: Tuple[bytes, ...] = tuple(
-    bytes([c]) for c in (PASSWORD_SET.encode()))
-
-
-def _worker_full(zip_path: str,
-                 member_name: str,
-                 two_char_prefixes: List[bytes],
-                 found: Event,
-                 attempts_shared: Value,
-                 lock: Lock):
-    try:
-        with zipfile.ZipFile(zip_path) as zf:
-            member_info = zf.getinfo(member_name)  # 워커 시작 시 1회만
-            tail_repeat = PASSWORD_LEN - 2
-            local = 0
-            for pfx in two_char_prefixes:
-                for tail in itertools.product(PASSWORD_SET_BYTES, repeat=tail_repeat):
-                    if found.is_set():
-                        # 남들이 찾았으면 즉시 종료
-                        if local:
-                            with lock:
-                                attempts_shared.value += local
-                        return
-                    pwd_bytes = pfx + b''.join(tail)
-                    if try_password_bytes(zf, member_info, pwd_bytes):
-                        with open(PASSWORD_FILE, 'w', encoding='utf-8') as f:
-                            f.write(f'zip 파일 암호: {pwd_bytes.decode()}\n')
-                        print(f'[MP] 성공! 암호={pwd_bytes.decode()}')
-                        found.set()
-                        if local:
-                            with lock:
-                                attempts_shared.value += local
-                        return
-                    local += 1
-                    # 카운터는 배치로만 반영(락 경합 최소화)
-                    if local >= COUNTER_BATCH:
-                        with lock:
-                            attempts_shared.value += local
-                        local = 0
-            # 잔여 반영
-            if local:
-                with lock:
-                    attempts_shared.value += local
-    except KeyboardInterrupt:
-        return
-
-
-def unlock_zip_fast_mp(procs: int = 0) -> Optional[str]:
-    """
-    더 빠른 알고리즘:
-      - ZIP 내부 '가장 작은 파일'로 검증(I/O 최소화)
-      - 두 글자(prefix 2자리) 분할 → 36*36=1296 버킷을 프로세스에 균등 분배
-      - 비밀번호 bytes 조합으로 인코딩 비용 제거
-    """
-    print(f'시작 시간: {now_str()}')
-
-    if not os.path.exists(SECRET_FILE):
-        print('zip 파일을 찾을 수 없습니다.')
-        return None
-
-    total_space = len(PASSWORD_SET) ** PASSWORD_LEN  # 36^6
-    start = time.perf_counter()
-
-    # 멤버 이름(가장 작은 파일)만 사전 확보
-    try:
-        with zipfile.ZipFile(SECRET_FILE) as zf:
-            infos = zf.infolist()
-            if not infos:
-                print('zip 내부가 비어있습니다.')
-                return None
-            member_name = min(infos, key=lambda i: (i.file_size or 0)).filename
-    except zipfile.BadZipFile:
-        print('손상된 ZIP 파일입니다.')
-        return None
-
-    if procs <= 0:
-        procs = max(1, min(cpu_count(), MAX_PROCS))
-    print(f'프로세스={procs} (2글자 prefix 분할)')
-
-    # 2글자 prefix 1296개 생성 → 균등 분배
-    first = PASSWORD_SET.encode()
-    two_prefixes: List[bytes] = []
-    for a in first:
-        for b in first:
-            two_prefixes.append(bytes([a, b]))
-
-    buckets: List[List[bytes]] = [[] for _ in range(procs)]
-    for i, pfx in enumerate(two_prefixes):
-        buckets[i % procs].append(pfx)
-
-    found = Event()
-    attempts_shared = Value('Q', 0)
-    lock = Lock()
-
-    ps: List[Process] = []
-    for b in buckets:
-        if not b:
+    processes = []
+    for i in range(num_processes):
+        if not buckets[i]:
             continue
-        p = Process(target=_worker_full, args=(
-            SECRET_FILE, member_name, b, found, attempts_shared, lock))
+        p = Process(target=worker_process,
+                    args=(i, buckets[i], found_event, result_queue, progress_queue))
         p.start()
-        ps.append(p)
+        processes.append(p)
 
-    last = 0.0
+    total_attempts = 0
+    process_attempts = [0] * num_processes
+    last_update_time = time.perf_counter()
+
     try:
-        while any(p.is_alive() for p in ps) and not found.is_set():
-            now = time.perf_counter()
-            if now - last >= REPORT_SEC:
-                last = now
-                tried = attempts_shared.value
-                elapsed = now - start
-                rate = tried / elapsed if elapsed > 0 else 0.0
-                prog = tried / total_space * 100
-                remain = max(total_space - tried, 0)
-                eta = remain / rate if rate > 0 else math.inf
-                eta_str = "∞" if not math.isfinite(eta) else fmt_duration(eta)
-                print(f'[MP] 시도={tried:,}, 경과={fmt_duration(elapsed)}, 처리율={rate:,.0f}/s, '
-                      f'진행률={prog:.6f}%, ETA={eta_str}')
+        while not found_event.is_set() and any(p.is_alive() for p in processes):
+            try:
+                while not progress_queue.empty():
+                    process_id, attempts = progress_queue.get_nowait()
+                    process_attempts[process_id] = attempts
+
+                current_total = sum(process_attempts)
+                current_time = time.perf_counter()
+
+                if (current_total > total_attempts and
+                        (current_time - last_update_time > 3 or current_total - total_attempts > 50000)):
+
+                    total_attempts = current_total
+                    elapsed = current_time - start
+                    prog = total_attempts / total_space * 100
+                    speed = total_attempts / elapsed if elapsed > 0 else 0
+
+                    print(f"시도횟수={total_attempts:,}, 경과시간={str(timedelta(seconds=elapsed)).split('.')[0]}, "
+                          f'진행률={prog:.6f}%, 속도={speed:,.0f}/초')
+                    last_update_time = current_time
+
+            except:
+                pass
+
             time.sleep(0.2)
+
     except KeyboardInterrupt:
-        print('\n중단 요청')
-    finally:
-        for p in ps:
-            p.join(timeout=0.2)
+        print('\n중단 요청을 받았습니다.')
 
-    if found.is_set():
+    for p in processes:
+        p.join(timeout=1)
+        if p.is_alive():
+            p.terminate()
+
+    if not result_queue.empty():
+        result_data = result_queue.get()
+        if isinstance(result_data, tuple):
+            pwd, final_attempts = result_data
+        else:
+            pwd = result_data
+            final_attempts = sum(process_attempts)
+
         elapsed = time.perf_counter() - start
-        print(f'[MP] 완료. 총 소요 {fmt_duration(elapsed)}')
-        try:
-            with open(PASSWORD_FILE, 'r', encoding='utf-8') as f:
-                return f.read().strip().split(':', 1)[-1].strip()
-        except Exception:
-            return None
+        print('-----------------------------')
+        print('암호가 해독되었습니다!')
+        print(f'암호: {pwd}')
+        print(f'총 시도 횟수: {final_attempts:,}')
+        print(f'총 소요 시간: {elapsed:.2f}초')
+        print(f'평균 속도: {final_attempts/elapsed:,.0f} passwords/sec')
+        print(f'배치 처리 효과: 약 {BATCH_SIZE}개씩 묶어서 처리')
+        print('-----------------------------')
 
-    print('[MP] 실패: 전체 공간 소진')
+        with open(PASSWORD_FILE, 'w', encoding='utf-8') as f:
+            f.write(f'zip 파일 암호: {pwd}\n')
+        return pwd
+
+    elapsed = time.perf_counter() - start
+    total_final = sum(process_attempts)
+    if found_event.is_set():
+        print(
+            f"\n중단됨. 현재 시도={total_final:,}, 경과={str(timedelta(seconds=elapsed)).split('.')[0]}")
+    else:
+        print('암호 찾기를 실패하였습니다.')
     return None
 
 
 def main():
-    password = unlock_zip_fast_mp(procs=4)  # 0=자동 코어 수
-    # 필요 시 단일 프로세스 테스트:
-    # password = unlock_zip()
+    password = unlock_zip()
 
     if not password:
         print('암호 해독에 실패하였습니다.')
