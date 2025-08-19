@@ -107,27 +107,35 @@ class EngineeringCalculator(Calculator):
 
         return expression
 
+    def squared(self, i, tokens):
+        if i == 0 or not self._is_number(tokens[i-1]):
+            return None
+        base = float(tokens[i-1])
+        result = base ** 2
+        tokens[i-1] = result
+        tokens.pop(i)
+        i -= 1
+        return i
+
+    def cubed(self, i, tokens):
+        if i == 0 or not self._is_number(tokens[i-1]):
+            return None
+        base = float(tokens[i-1])
+        result = base ** 3
+        tokens[i-1] = result
+        tokens.pop(i)
+        i -= 1
+        return i
+
     def _process_functions_and_powers(self, tokens):
         i = 0
         while i < len(tokens):
             token = tokens[i]
 
             if token == '²':
-                if i == 0 or not self._is_number(tokens[i-1]):
-                    return None
-                base = float(tokens[i-1])
-                result = base ** 2
-                tokens[i-1] = result
-                tokens.pop(i)
-                i -= 1
+                i = self.squared(i, tokens)
             elif token == '³':
-                if i == 0 or not self._is_number(tokens[i-1]):
-                    return None
-                base = float(tokens[i-1])
-                result = base ** 3
-                tokens[i-1] = result
-                tokens.pop(i)
-                i -= 1
+                i = self.cubed(i, tokens)
 
             elif token in ['sinh', 'cosh', 'tanh', 'sin', 'cos', 'tan']:
                 if i + 1 < len(tokens) and tokens[i + 1] == '(':
