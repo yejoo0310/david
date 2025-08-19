@@ -43,7 +43,7 @@ class EngineeringCalculator(Calculator):
             if token == '%':
                 parsed_expressions.append(token)
             elif token == 'π':
-                parsed_expressions.append(math.pi)
+                parsed_expressions = self.pi(parsed_expressions)
             elif token in ['²', '³']:
                 parsed_expressions.append(token)
             elif token in ['sinh', 'cosh', 'tanh', 'sin', 'cos', 'tan']:
@@ -106,6 +106,10 @@ class EngineeringCalculator(Calculator):
                 return self._tokens_to_string(tokens)
 
         return expression
+
+    def pi(self, parsed_expressions):
+        parsed_expressions.append(math.pi)
+        return parsed_expressions
 
     def squared(self, i, tokens):
         if i == 0 or not self._is_number(tokens[i-1]):
