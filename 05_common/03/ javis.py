@@ -36,7 +36,6 @@ def save(recording):
     filepath = os.path.join(RECORDS_DIR, filename)
     sf.write(filepath, recording, FS, subtype='PCM_16')
     print(f'녹음된 오디오가 파일로 저장되었습니다: {filename}')
-    return filepath
 
 
 def transcribe_audio_files_with_vosk():
@@ -103,9 +102,6 @@ def transcribe_audio_files_with_vosk():
 
 def main():
     recording = record()
-    if recording is None:
-        print('녹음에 실패하였습니다.')
-        return
     # play(recording)
     save(recording)
     transcribe_audio_files_with_vosk()
