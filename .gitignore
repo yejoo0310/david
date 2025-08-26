@@ -1,3 +1,9 @@
 codyssey_project/
 __pycache__
 .venv
+05_common/03/model
+05_common/03/records
+05_common/03/texts
+05_common/04/coco.names
+05_common/04/yolov3.cfg
+05_common/04/yolov3.weights
